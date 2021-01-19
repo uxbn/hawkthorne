@@ -3,13 +3,15 @@ import { Message, MessageEmbed } from "discord.js"
 import { eventDefinitions } from "../definitions/event_definitions"
 import { ActivityDefinition } from "../model/activity"
 import { Session } from "../sessions/session"
-import { parseDate } from "chrono-node"
+// import { parse, parseDate } from "chrono-node"
 import { PrismaClient } from "@prisma/client"
 import { EventMessageGenerator } from "../message_generators/event_message_generator"
+import { parseDate } from "./date_parsing"
 
 export interface CreateEventSession extends Session {
   activityDefinition: ActivityDefinition,
   startDate: Date,
+  timezoneOffset: number,
   eventDescription?: string,
   // responseEmbed: MessageEmbed,
   responseMessage: Message
@@ -22,9 +24,17 @@ export class EventMessageHandler {
         CreateEventMessageHandler.handle(session as CreateEventSession)
         break
       default:
-        message.reply("default")
+        this.generateEventSummary(message.args.commandName, session)
         break
     }
+  }
+
+  private static async generateEventSummary(potentialEventId: string, session: Session) {
+    const eventId = Number(potentialEventId)
+    const responseMessage = isNaN(eventId)
+      ? new MessageEmbed().setColor("#cc0000").setTitle(`Invalid join ID ${potentialEventId}.`)
+      : await new EventMessageGenerator().generateById(eventId)
+    await session.channel.send(responseMessage)
   }
 }
 
@@ -33,11 +43,13 @@ export class CreateEventMessageHandler {
     await this.promptForActivity(session)
     await this.promptForStartDate(session)
     await this.promptForDescription(session)
+    
     const prisma = new PrismaClient()
     const event = await prisma.event.create({ data: {
       title: session.activityDefinition.name,
       description: session.eventDescription,
       startDate: session.startDate,
+      timezoneOffset: session.timezoneOffset ? session.timezoneOffset : undefined,
     }})
     const dbUser = await prisma.user.upsert({
       create: { displayName: session.user.username, discordId: session.user.id }, 
@@ -104,7 +116,13 @@ export class CreateEventMessageHandler {
           time: 30000,
           errors: ["time"]
         })).first()
-      session.startDate = parseDate(response.content)
+      const dateResults = parseDate(response.content)
+      // TODO: show error and retry input if there is no parsed result.
+      if (dateResults.length > 0) {
+        const result = dateResults[0]
+        session.startDate = result.date()
+        session.timezoneOffset = result.start.get("timezoneOffset")
+      }
       session.channel.messages.delete(response)
     } catch (e) {
       const responseEmbed = new MessageEmbed()

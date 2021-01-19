@@ -2,7 +2,7 @@ import { Description, Discord, GuardFunction, Command, Guard, CommandMessage, On
 import { MessageEmbed, TextChannel } from 'discord.js';
 import { Session } from "./sessions/session";
 import { ExampleMessageGenerator } from "./message_generators/example_message_generator";
-import { EventMessageHandler } from "./services/EventService";
+import { EventMessageHandler } from "./services/event_service";
 import { SessionManager } from "./sessions/session_manager";
 
 const NotBot: GuardFunction<"message"> = async (

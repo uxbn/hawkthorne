@@ -13,6 +13,7 @@ generator client {
 model Event {
   id Int @default(autoincrement()) @id
   startDate DateTime @default(now())
+  timezoneOffset Float @default(0) // GMT
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   title String

@@ -16,12 +16,14 @@ export class EventMessageGenerator implements MessageGenerator {
   }
 
   async generate(event: Event): Promise<MessageEmbed> {
+    const prisma = new PrismaClient()
+
+    const creatorDisplayName = (await prisma.user.findUnique(
+      { where: { id: event.createdById } })).displayName
     const embed = new MessageEmbed()
       .setTitle(event.title)
       .setTimestamp(event.startDate)
-    if (event.description) {
-      embed.setDescription(event.description)
-    }
+      .setFooter(`Creator | ${creatorDisplayName} | Your Time`)
     // TODO: Locale from Discord User
     const dateString = new Intl.DateTimeFormat(
       [], 
@@ -34,10 +36,11 @@ export class EventMessageGenerator implements MessageGenerator {
     embed.addField("When", dateString + "\n" + timeString, true)
     embed.addField('\u200B', '\u200B', true) // Blank space.
     embed.addField("Join ID", event.id, true)
-    embed.addField('\u200B', '\u200B', false) // Blank space.
-
-    const prisma = new PrismaClient()
-    const registrations = await prisma.event.findUnique({where: {id: event.id}}).registrations()
+    if (event.description) {
+      embed.addField("Description", event.description, false)
+    }
+    
+    const registrations = await prisma.event.findUnique({ where: { id: event.id } }).registrations()
     const categoriesToRegistrations: { [key: string]: Registration[] } = 
       registrations.reduce((map, registration) => {
         const categoryRegistrations = map[registration.registrationType] || []

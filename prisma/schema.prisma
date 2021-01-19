@@ -16,6 +16,8 @@ model Event {
   timezoneOffset Float @default(0) // GMT
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  createdBy User @relation(fields: [createdById], references: [id])
+  createdById Int
   title String
   description String?
   registrations Registration[]

@@ -3,8 +3,7 @@ import { Message, MessageEmbed } from "discord.js"
 import { eventDefinitions } from "../definitions/event_definitions"
 import { ActivityDefinition } from "../model/activity"
 import { Session } from "../sessions/session"
-// import { parse, parseDate } from "chrono-node"
-import { PrismaClient } from "@prisma/client"
+import { Event, PrismaClient, Registration, User } from "@prisma/client"
 import { EventMessageGenerator } from "../message_generators/event_message_generator"
 import { parseDate } from "./date_parsing"
 
@@ -13,7 +12,6 @@ export interface CreateEventSession extends Session {
   startDate: Date,
   timezoneOffset: number,
   eventDescription?: string,
-  // responseEmbed: MessageEmbed,
   responseMessage: Message
 }
 
@@ -21,6 +19,7 @@ export class EventMessageHandler {
   static async handle(message: CommandMessage, session: Session): Promise<void> {
     switch (message.args.commandName) {
       case "create":
+        // TODO: Remove this cast.
         CreateEventMessageHandler.handle(session as CreateEventSession)
         break
       default:
@@ -44,28 +43,10 @@ export class CreateEventMessageHandler {
     await this.promptForStartDate(session)
     await this.promptForDescription(session)
     
-    const prisma = new PrismaClient()
-    const event = await prisma.event.create({ data: {
-      title: session.activityDefinition.name,
-      description: session.eventDescription,
-      startDate: session.startDate,
-      timezoneOffset: session.timezoneOffset ? session.timezoneOffset : undefined,
-    }})
-    const dbUser = await prisma.user.upsert({
-      create: { displayName: session.user.username, discordId: session.user.id }, 
-      update: { displayName: session.user.username },
-      where: { discordId: session.user.id }
-    })
-    await prisma.registration.create({ data: {
-      registrationType: 0,
-      user: { connect: { id: dbUser.id } },
-      event: { connect: { id: event.id } }
-    }})
-    await prisma.registration.create({ data: {
-      registrationType: 1,
-      user: { connect: { id: dbUser.id } },
-      event: { connect: { id: event.id } }
-    }})
+    // TODO: Check for the user first and direct to an initial config message.
+    const dbUser = await this.upsertUser(session)
+    const event = await this.insertEvent(session, dbUser)
+    await this.joinUserToEvent(dbUser, event)
     const responseMessage = await new EventMessageGenerator().generate(event)
     session.responseMessage.edit(responseMessage)
   }
@@ -113,7 +94,7 @@ export class CreateEventMessageHandler {
         message => message.author.id === session.user.id, 
         {
           max: 1,
-          time: 30000,
+          time: 60000,
           errors: ["time"]
         })).first()
       const dateResults = parseDate(response.content)
@@ -145,7 +126,7 @@ export class CreateEventMessageHandler {
         message => message.author.id === session.user.id, 
         {
           max: 1,
-          time: 30000,
+          time: 60000,
           errors: ["time"]
         })).first()
       session.eventDescription = response.content
@@ -153,5 +134,36 @@ export class CreateEventMessageHandler {
     } catch (e) {
       // no-op, empty description
     }
+  }
+
+  private static async insertEvent(session: CreateEventSession, user: User): Promise<Event> {
+    const prisma = new PrismaClient()
+    return prisma.event.create({ data: {
+      title: session.activityDefinition.name,
+      description: session.eventDescription,
+      startDate: session.startDate,
+      createdBy: { connect: { id: user.id } },
+      timezoneOffset: session.timezoneOffset ? session.timezoneOffset : undefined,
+    }})
+  }
+
+  private static upsertUser(session: CreateEventSession): Promise<User> {
+    const prisma = new PrismaClient()
+    // Ensure User is in the DB.
+    const dbUserPromise = prisma.user.upsert({
+      create: { displayName: session.user.username, discordId: session.user.id },
+      update: { displayName: session.user.username },
+      where: { discordId: session.user.id }
+    })
+    return dbUserPromise
+  }
+
+  private static joinUserToEvent(user: User, event: Event): Promise<Registration> {
+    const prisma = new PrismaClient()
+    return prisma.registration.create({ data: {
+      registrationType: 0,
+      user: { connect: { id: user.id } },
+      event: { connect: { id: event.id } }
+    }})
   }
 }

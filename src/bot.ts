@@ -52,7 +52,9 @@ export class Bot {
 
   @On("messageReactionAdd")
   messageReactionAdd([reaction]: ArgsOf<"messageReactionAdd">): void {
-    console.log(`${reaction.emoji.name} was selected.`);
+    if (reaction.message.author.bot && !reaction.me) {
+      reaction.remove()
+    }
   }
 
   @On("messageDelete")

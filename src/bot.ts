@@ -15,7 +15,7 @@ const NotBot: GuardFunction<"message"> = async (
   }
 };
 
-@Discord("#")
+@Discord("$")
 @Description("Hawkthorne Bot")
 export class Bot {
   private _sessionManager = new SessionManager()
@@ -52,8 +52,6 @@ export class Bot {
 
   @On("messageReactionAdd")
   messageReactionAdd([reaction]: ArgsOf<"messageReactionAdd">): void {
-    // const session = this._sessionManager.sessionForSnowflake(reaction.message.reactions.re)
-
     console.log(`${reaction.emoji.name} was selected.`);
   }
 

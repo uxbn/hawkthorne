@@ -1,6 +1,7 @@
 import { Event, PrismaClient, Registration } from "@prisma/client";
 import { MessageEmbed } from "discord.js";
 import { RegistrationType } from "../model/registration_type";
+import { MessageEmbedUtils } from "../utils/message_embed_utils";
 import { MessageGenerator } from './message_generator';
 
 export class EventMessageGenerator implements MessageGenerator {
@@ -27,15 +28,15 @@ export class EventMessageGenerator implements MessageGenerator {
     // TODO: Locale from Discord User
     const dateString = new Intl.DateTimeFormat(
       [], 
-      { weekday: "long", day: "numeric", month: "numeric", timeZone: "CST" },
+      { weekday: "long", day: "numeric", month: "numeric", timeZone: event.timeZone },
     ).format(event.startDate)
     const timeString = new Intl.DateTimeFormat(
       [], 
-      { hour: "numeric", minute: "2-digit", timeZone: "CST", timeZoneName: "short" },
+      { hour: "numeric", minute: "2-digit", timeZone: event.timeZone, timeZoneName: "short" },
     ).format(event.startDate)
     embed.addField("When", dateString + "\n" + timeString, true)
     embed.addField('\u200B', '\u200B', true) // Blank space.
-    embed.addField("Join ID", event.id, true)
+    MessageEmbedUtils.addEventIdToEmbed(event.id, embed)
     if (event.description) {
       embed.addField("Description", event.description, false)
     }

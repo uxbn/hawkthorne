@@ -13,7 +13,8 @@ generator client {
 model Event {
   id Int @default(autoincrement()) @id
   startDate DateTime @default(now())
-  timezoneOffset Float @default(0) // GMT
+  timeZoneOffset Float @default(0)
+  timeZone String @default("GMT")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   createdBy User @relation(fields: [createdById], references: [id])

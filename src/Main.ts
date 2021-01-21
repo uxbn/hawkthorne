@@ -1,4 +1,4 @@
-import { Client } from "@typeit/discord";
+import { Client, ClientOptions } from "@typeit/discord";
 
 export class Main {
   private static _client: Client;
@@ -8,7 +8,8 @@ export class Main {
   }
 
   static start(): void {
-    this._client = new Client();
+    const options = { partials: ["USER", "REACTION", "MESSAGE"] } as ClientOptions
+    this._client = new Client(options);
 
     this._client.login(
       "Nzk5MTU0MDk0MjIzOTE3MDY2.X__cPw.2bh17Dc54NLCSWd1FtUCKoOe3OU",

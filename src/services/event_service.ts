@@ -1,16 +1,18 @@
 import { CommandMessage } from "@typeit/discord"
-import { Message, MessageEmbed } from "discord.js"
+import { Message, MessageEmbed, User as DiscordUser } from "discord.js"
 import { eventDefinitions } from "../definitions/event_definitions"
 import { ActivityDefinition } from "../model/activity"
 import { Session } from "../sessions/session"
 import { Event, PrismaClient, Registration, User } from "@prisma/client"
 import { EventMessageGenerator } from "../message_generators/event_message_generator"
 import { parseDate } from "./date_parsing"
+import { TimeZoneParser } from "../utils/time_zone"
 
 export interface CreateEventSession extends Session {
   activityDefinition: ActivityDefinition,
   startDate: Date,
-  timezoneOffset: number,
+  timeZoneOffset: number,
+  timeZoneName: string,
   eventDescription?: string,
   responseMessage: Message
 }
@@ -44,7 +46,7 @@ export class CreateEventMessageHandler {
     await this.promptForDescription(session)
     
     // TODO: Check for the user first and direct to an initial config message.
-    const dbUser = await this.upsertUser(session)
+    const dbUser = await this.upsertUser(session.user)
     const event = await this.insertEvent(session, dbUser)
     await this.joinUserToEvent(dbUser, event)
     const responseMessage = await new EventMessageGenerator().generate(event)
@@ -102,7 +104,9 @@ export class CreateEventMessageHandler {
       if (dateResults.length > 0) {
         const result = dateResults[0]
         session.startDate = result.date()
-        session.timezoneOffset = result.start.get("timezoneOffset")
+        session.timeZoneOffset = result.start.get("timezoneOffset")
+        const timeZoneName = TimeZoneParser.offsetToTimeZoneName(session.timeZoneOffset)
+        session.timeZoneName = timeZoneName
       }
       session.channel.messages.delete(response)
     } catch (e) {
@@ -118,7 +122,8 @@ export class CreateEventMessageHandler {
     const responseEmbed = new MessageEmbed()
       .setColor("#0099ff")
       .setTitle("What should the event description be?")
-      .setDescription("You can add *italics* by surrounding text with an *. To **bold**, use **.")
+      .setDescription("You can add _italics_ by surrounding text with _.\n" +
+                      "To **bold**, use **.")
     await session.responseMessage.edit(responseEmbed)
 
     try {
@@ -143,19 +148,29 @@ export class CreateEventMessageHandler {
       description: session.eventDescription,
       startDate: session.startDate,
       createdBy: { connect: { id: user.id } },
-      timezoneOffset: session.timezoneOffset ? session.timezoneOffset : undefined,
+      timeZoneOffset: session.timeZoneOffset ? session.timeZoneOffset : undefined,
+      timeZone: session.timeZoneName,
     }})
   }
 
-  private static upsertUser(session: CreateEventSession): Promise<User> {
+  static upsertUser(user: DiscordUser): Promise<User> {
     const prisma = new PrismaClient()
     // Ensure User is in the DB.
     const dbUserPromise = prisma.user.upsert({
-      create: { displayName: session.user.username, discordId: session.user.id },
-      update: { displayName: session.user.username },
-      where: { discordId: session.user.id }
+      create: { displayName: user.username, discordId: user.id },
+      update: { displayName: user.username },
+      where: { discordId: user.id }
     })
     return dbUserPromise
+  }
+  
+  static async joinUserToEventId(user: User, eventId: number): Promise<Registration> {
+    const prisma = new PrismaClient()
+    const event = await prisma.event.findUnique({ where: { id: eventId } })
+    if (!event) {
+      throw `No event ${eventId}`
+    }
+    return this.joinUserToEvent(user, event)
   }
 
   private static joinUserToEvent(user: User, event: Event): Promise<Registration> {
@@ -165,5 +180,22 @@ export class CreateEventMessageHandler {
       user: { connect: { id: user.id } },
       event: { connect: { id: event.id } }
     }})
+  }
+
+  static async removeUserFromEventId(user: User, eventId: number): Promise<void> {
+    const prisma = new PrismaClient()
+    const event = await prisma.event.findUnique({ where: { id: eventId } })
+    if (!event) {
+      throw `No event ${eventId}`
+    }
+    return this.removeUserFromEvent(user, event)
+  }
+
+  private static async removeUserFromEvent(user: User, event: Event): Promise<void> {
+    const prisma = new PrismaClient()
+    const registration = await prisma.registration.findFirst({where: {event: event, user: user}})
+    if (registration) {
+      await prisma.registration.delete({where: {id: registration.id}})
+    }
   }
 }

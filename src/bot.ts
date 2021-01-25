@@ -1,15 +1,17 @@
+import { PrismaClient } from "@prisma/client";
 import { 
   Description, Discord, GuardFunction, Command, Guard, CommandMessage, On, ArgsOf
 } from "@typeit/discord"
 import { 
   MessageReaction, PartialUser as PartialDiscordUser, TextChannel, User as DiscordUser 
 } from 'discord.js';
+import { reactionDefinitions } from "./definitions/reaction_definitions";
 import { EventMessageGenerator } from "./message_generators/event_message_generator";
 import { ExampleMessageGenerator } from "./message_generators/example_message_generator";
+import { RegistrationType } from "./model/registration_type";
 import { EventMessageHandler } from "./services/event_message_handler";
 import { EventService } from "./services/event_service";
 import { RegistrationService } from "./services/registration_service";
-import { SessionManager } from "./sessions/session_manager";
 import { MessageEmbedUtils } from "./utils/message_embed_utils";
 
 const NotBot: GuardFunction<"message"> = async (
@@ -25,7 +27,7 @@ const NotBot: GuardFunction<"message"> = async (
 @Discord("$")
 @Description("Hawkthorne Bot")
 export class Bot {
-  private _sessionManager = new SessionManager()
+  private _prisma = new PrismaClient()
 
   @Command("ping")
   @Guard(NotBot)
@@ -44,12 +46,13 @@ export class Bot {
       return
     }
     EventMessageHandler.handle(
-      command, { channel: command.channel as TextChannel, user: command.author })
+      command, { channel: command.channel as TextChannel, user: command.author }, this._prisma)
   }
 
   @On("ready")
   initialize(): void {
     console.log("Bot logged in.");
+    console.log(this)
   }
 
   @On("message")
@@ -133,15 +136,22 @@ export class Bot {
     const dbUser = await eventService.upsertUser(discordUser)
 
     if (reaction.emoji.name == "hawk_plus") {
-      const registration = await registrationService.joinUserToEventId(dbUser, eventId)
+      const registration = await registrationService.joinUserToEventId(
+        dbUser, eventId, RegistrationType.Confirmed)
       if (!registration) {
         throw "Failed to create registration"
       }
     } else if (reaction.emoji.name == "hawk_remove") {
       await registrationService.removeUserFromEventId(dbUser, eventId)
+    } else if (reaction.emoji.name == reactionDefinitions["question"].emoji) {
+      const registration = await registrationService.joinUserToEventId(
+        dbUser, eventId, RegistrationType.Tentative)
+      if (!registration) {
+        throw "Failed to create registration"
+      }
     }
     
-    message.edit(await new EventMessageGenerator().generateById(eventId))
+    message.edit(await new EventMessageGenerator(this._prisma).generateById(eventId))
     await reaction.users.remove(discordUser.id)
   }
 

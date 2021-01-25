@@ -1,8 +1,9 @@
+import { PrismaClient } from "@prisma/client"
 import { MessageEmbed } from "discord.js"
 import { eventDefinitions } from "../definitions/event_definitions"
-import { reactionDefinitions } from "../definitions/reaction_definitions"
 import { EventMessageGenerator } from "../message_generators/event_message_generator"
 import { ActivityDefinition } from "../model/activity"
+import { RegistrationType } from "../model/registration_type"
 import { MessageUtils } from "../utils/message_utils"
 import { TimeZoneParser } from "../utils/time_zone"
 import { parseDate } from "./date_parsing"
@@ -19,7 +20,7 @@ export interface CreateEventSession extends EventSession {
 }
 
 export class CreateEventMessageHandler {
-  static async handle(session: CreateEventSession): Promise<void> {
+  static async handle(session: CreateEventSession, prisma: PrismaClient): Promise<void> {
     // TODO: Check for the user first and direct to an initial config message.
     await this.promptForActivity(session)
     await this.promptForStartDate(session)
@@ -47,8 +48,8 @@ export class CreateEventMessageHandler {
       session.startDate,
       session.timeZoneName,
       session.timeZoneOffset)
-    await registrationService.joinUserToEvent(dbUser, event)
-    const eventMessage = await new EventMessageGenerator().generate(event)
+    await registrationService.joinUserToEvent(dbUser, event, RegistrationType.Confirmed)
+    const eventMessage = await new EventMessageGenerator(prisma).generate(event)
     const sentMessage = await session.responseMessage.edit(eventMessage)
     return MessageUtils.addEventReactions(sentMessage)
   }

@@ -1,3 +1,4 @@
+import { PrismaClient } from "@prisma/client"
 import { CommandMessage } from "@typeit/discord"
 import { Message } from "discord.js"
 import { Session } from "../sessions/session"
@@ -9,13 +10,17 @@ export interface EventSession extends Session {
 }
 
 export class EventMessageHandler {
-  static async handle(message: CommandMessage, session: Session): Promise<void> {
+  static async handle(
+    message: CommandMessage, 
+    session: Session, 
+    prisma: PrismaClient
+  ): Promise<void> {
     switch (message.args.commandName) {
       case "create":
-        CreateEventMessageHandler.handle(session)
+        CreateEventMessageHandler.handle(session, prisma)
         break
       default:
-        EventDescriptionMessageHandler.handle(message.args.commandName, session)
+        EventDescriptionMessageHandler.handle(message.args.commandName, session, prisma)
         break
     }
   }

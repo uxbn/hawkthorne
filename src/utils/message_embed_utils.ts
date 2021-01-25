@@ -12,7 +12,7 @@ export class MessageEmbedUtils {
     return undefined
   }
 
-  static addEventIdToEmbed(eventId: number, embed: MessageEmbed): void {
+  static addEventIdFieldToEmbed(eventId: number, embed: MessageEmbed): void {
     embed.addField(this.joinIdName, eventId, true)
   }
 }

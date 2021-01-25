@@ -5,7 +5,11 @@ import { MessageEmbedUtils } from "../utils/message_embed_utils";
 import { MessageGenerator } from './message_generator';
 
 export class EventMessageGenerator implements MessageGenerator {
-  private _prisma = new PrismaClient()
+  private _prisma: PrismaClient
+
+  constructor(prisma: PrismaClient) {
+    this._prisma = prisma
+  }
 
   async generateById(eventId: number): Promise<MessageEmbed> {
     const event = await this._prisma.event.findUnique({where: {id: eventId}})
@@ -26,7 +30,6 @@ export class EventMessageGenerator implements MessageGenerator {
       .setTitle(event.title)
       .setTimestamp(event.startDate)
       .setFooter(`Creator | ${creator.displayName} | Your Time`)
-    // TODO: Locale from Discord User
     const dateString = new Intl.DateTimeFormat(
       [], 
       { weekday: "long", day: "numeric", month: "numeric", timeZone: event.timeZone },
@@ -37,7 +40,7 @@ export class EventMessageGenerator implements MessageGenerator {
     ).format(event.startDate)
     embed.addField("When", dateString + "\n" + timeString, true)
     embed.addField('\u200B', '\u200B', true) // Blank space.
-    MessageEmbedUtils.addEventIdToEmbed(event.id, embed)
+    MessageEmbedUtils.addEventIdFieldToEmbed(event.id, embed)
     if (event.description) {
       embed.addField("Description", event.description, false)
     }

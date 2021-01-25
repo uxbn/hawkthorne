@@ -5,9 +5,10 @@ import { MessageEmbedUtils } from "../utils/message_embed_utils";
 import { MessageGenerator } from './message_generator';
 
 export class EventMessageGenerator implements MessageGenerator {
+  private _prisma = new PrismaClient()
+
   async generateById(eventId: number): Promise<MessageEmbed> {
-    const prisma = new PrismaClient()
-    const event = await prisma.event.findUnique({where: {id: eventId}})
+    const event = await this._prisma.event.findUnique({where: {id: eventId}})
     if (event == null) {
       return new MessageEmbed()
         .setColor("#cc0000")
@@ -17,14 +18,14 @@ export class EventMessageGenerator implements MessageGenerator {
   }
 
   async generate(event: Event): Promise<MessageEmbed> {
-    const prisma = new PrismaClient()
-
-    const creatorDisplayName = (await prisma.user.findUnique(
-      { where: { id: event.createdById } })).displayName
+    const creator = await this._prisma.user.findUnique({ where: { id: event.createdById } })
+    if (!creator) {
+      throw Error("Could not get creator with user id: " + event.createdById)
+    }
     const embed = new MessageEmbed()
       .setTitle(event.title)
       .setTimestamp(event.startDate)
-      .setFooter(`Creator | ${creatorDisplayName} | Your Time`)
+      .setFooter(`Creator | ${creator.displayName} | Your Time`)
     // TODO: Locale from Discord User
     const dateString = new Intl.DateTimeFormat(
       [], 
@@ -41,21 +42,26 @@ export class EventMessageGenerator implements MessageGenerator {
       embed.addField("Description", event.description, false)
     }
     
-    const registrations = await prisma.event.findUnique({ where: { id: event.id } }).registrations()
-    const categoriesToRegistrations: { [key: string]: Registration[] } = 
+    const registrations = await this._prisma.event.findUnique(
+      { where: { id: event.id } }).registrations()
+    const categoriesToRegistrations: Record<number, Registration[]> = 
       registrations.reduce((map, registration) => {
         const categoryRegistrations = map[registration.registrationType] || []
         categoryRegistrations.push(registration)
         map[registration.registrationType] = categoryRegistrations
         return map
-    }, {});
+      }, {} as Record<number, Registration[]>)
     for (const category in categoriesToRegistrations) {
       const userIds = categoriesToRegistrations[category].map(r => {
         return r.userId
       })
       const names: string[] = []
       for (const userId of userIds) {
-        names.push((await prisma.user.findUnique({where: {id: userId}})).displayName)
+        const user = await this._prisma.user.findUnique({where: {id: userId}})
+        if (!user) {
+          throw new Error("Registered user not found in db")
+        }
+        names.push(user.displayName)
       }
       embed.addField(`${RegistrationType[category]}`, names.join("\n"), true)
     }

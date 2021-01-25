@@ -42,6 +42,7 @@ export class TimeZoneParser {
   ]
 
   static offsetToTimeZoneName(timeZoneOffset: number): string|undefined {
-    return this.timeZones.find(t => t.offset == timeZoneOffset).name
+    const timeZone = this.timeZones.find(t => t.offset == timeZoneOffset)
+    return timeZone ? timeZone.name : undefined
   }
 }

@@ -1,14 +1,14 @@
-import { Description, Discord, GuardFunction, Command, Guard, CommandMessage, On, ArgsOf } from "@typeit/discord"
 import { 
-  MessageReaction, 
-  PartialUser as PartialDiscordUser, 
-  ReactionEmoji, 
-  TextChannel, 
-  User as DiscordUser 
+  Description, Discord, GuardFunction, Command, Guard, CommandMessage, On, ArgsOf
+} from "@typeit/discord"
+import { 
+  MessageReaction, PartialUser as PartialDiscordUser, TextChannel, User as DiscordUser 
 } from 'discord.js';
 import { EventMessageGenerator } from "./message_generators/event_message_generator";
 import { ExampleMessageGenerator } from "./message_generators/example_message_generator";
-import { CreateEventMessageHandler, EventMessageHandler } from "./services/event_service";
+import { EventMessageHandler } from "./services/event_message_handler";
+import { EventService } from "./services/event_service";
+import { RegistrationService } from "./services/registration_service";
 import { SessionManager } from "./sessions/session_manager";
 import { MessageEmbedUtils } from "./utils/message_embed_utils";
 
@@ -61,15 +61,23 @@ export class Bot {
   messageReactionAdd(
     [reaction, user]: ArgsOf<"messageReactionAdd">,
   ): void {
+    if (reaction.me) {
+      return
+    }
     this.reactionAddedByUser(reaction, user)
   }
 
+  /*
   @On("messageReactionRemove")
   messageReactionRemove(
     [reaction, user]: ArgsOf<"messageReactionRemove">,
   ): void {
+    if (reaction.me) {
+      return
+    }
     this.reactionRemovedByUser(reaction, user)
   }
+  */
 
   @On("messageDelete")
   messageDeleted([message]: ArgsOf<"messageDelete">): void {
@@ -99,12 +107,17 @@ export class Bot {
       return
     }
     // Remove arbitrary reactions from users.
-    if (!reaction.me) {
+    if (!this.isBotReaction(reaction)) {
       console.log(`Removing reaction ${reaction.emoji.name} from message ${message.id}`)
       await reaction.remove()
       return
     }
 
+    if (!this.isEventReaction(reaction)) {
+      console.log(`Skipping non-event reaction ${reaction.emoji.name} on message ${message.id}`)
+      return
+    }
+
     if (message.embeds.length == 0) {
       console.log("No embed found on bot message.")
       return
@@ -115,39 +128,41 @@ export class Bot {
     }
 
     const discordUser = user.partial ? await user.fetch() : user as DiscordUser
-    const dbUser = await CreateEventMessageHandler.upsertUser(discordUser)
-    const registration = await CreateEventMessageHandler.joinUserToEventId(dbUser, eventId)
-    if (!registration) {
-      throw "Failed to create registration"
+    const eventService = new EventService()
+    const registrationService = new RegistrationService()
+    const dbUser = await eventService.upsertUser(discordUser)
+
+    if (reaction.emoji.name == "hawk_plus") {
+      const registration = await registrationService.joinUserToEventId(dbUser, eventId)
+      if (!registration) {
+        throw "Failed to create registration"
+      }
+    } else if (reaction.emoji.name == "hawk_remove") {
+      await registrationService.removeUserFromEventId(dbUser, eventId)
     }
+    
     message.edit(await new EventMessageGenerator().generateById(eventId))
     await reaction.users.remove(discordUser.id)
   }
 
-  private async reactionRemovedByUser(
-    reaction: MessageReaction,
-    user: DiscordUser | PartialDiscordUser
-  ) {
-    const message = reaction.message.partial ? await reaction.message.fetch() : reaction.message
-    // Ignore non-bot messages and reactions that are not the bot's.
-    if (!message.author.bot || !reaction.me) {
-      // TODO: Only check for this bot's messages.
-      console.log(`Skipping reaction ${reaction.emoji.name} on message ${message.id}`)
-      return
-    }
+  // TODO: Put this list somewhere that makes much more sense.
+  private isBotReaction(reaction: MessageReaction): boolean {
+    // TODO: Read from reactionDefinitions
+    return [
+      "🇩",
+      "🇬",
+      "🇼",
+      "hawk_plus",
+      "hawk_remove",
+      "hawk_question"
+    ].find(name => name == reaction.emoji.name) != undefined
+  }
 
-    if (message.embeds.length == 0) {
-      console.log("No embed found on bot message.")
-      return
-    }
-    const eventId = MessageEmbedUtils.eventIdFromEmbed(message.embeds[0])
-    if (eventId == null) {
-      return
-    }
-
-    const discordUser = user.partial ? await user.fetch() : user as DiscordUser
-    const dbUser = await CreateEventMessageHandler.upsertUser(discordUser)
-    await CreateEventMessageHandler.removeUserFromEventId(dbUser, eventId)
-    message.edit(await new EventMessageGenerator().generateById(eventId))
+  private isEventReaction(reaction: MessageReaction): boolean {
+    return [
+      "hawk_plus",
+      "hawk_remove",
+      "hawk_question"
+    ].find(name => name == reaction.emoji.name) != undefined
   }
 }

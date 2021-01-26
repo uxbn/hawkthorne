@@ -76,14 +76,10 @@ export class EventMessageGenerator implements MessageGenerator {
     const confirmedRegistrations = categoriesToRegistrations[RegistrationType.Confirmed] || []
     const maxPlayers = event.maxPlayers
     if (maxPlayers == null || confirmedRegistrations.length <= maxPlayers) {
-      // Do a basic list if the number of registrations is not over the max.
+      // Do a basic list if there's no reg limit or the number of registrations is not over the max.
       const names = await this.attendeeNamesForRegistrations(confirmedRegistrations, prisma)
-      if (names.length == 0) { names.push("None") }
-      embed.addField(
-        `${RegistrationType[RegistrationType.Confirmed]} ` +
-          `(${confirmedRegistrations.length}/${event.maxPlayers})`,
-        names.join("\n"),
-        true)
+      if (names.length == 0) { names.push("Slots available!") }
+      embed.addField(`${RegistrationType[RegistrationType.Confirmed]}`, names.join("\n"), true)
     } else {
       // Divide the confirmed into groups based on max player count.
       const confirmedGroups: Registration[][] =
@@ -100,14 +96,17 @@ export class EventMessageGenerator implements MessageGenerator {
         const group = confirmedGroups[groupNumber]
         const names = await this.attendeeNamesForRegistrations(group, prisma)
         const count = group.length < maxPlayers ? `${group.length}/${event.maxPlayers}` : "Full"
-        embed.addField(`Group ${groupNumber+1} (${count})`, names.join("\n"), true)
+        embed.addField(
+          `Group ${String.fromCharCode(groupNumber+65)} (${count})`,
+          names.join(", "),
+          true)
       }
     }
 
     const tentativeRegistrations = categoriesToRegistrations[RegistrationType.Tentative] || []
     const names = await this.attendeeNamesForRegistrations(tentativeRegistrations, prisma)
     if (names.length > 0) {
-      embed.addField(`${RegistrationType[RegistrationType.Tentative]}`, names.join("\n"), true)
+      embed.addField(`${RegistrationType[RegistrationType.Tentative]}`, names.join(", "), true)
     }
   }
 

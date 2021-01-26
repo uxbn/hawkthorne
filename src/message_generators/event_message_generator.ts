@@ -99,10 +99,8 @@ export class EventMessageGenerator implements MessageGenerator {
       for (let groupNumber = 0; groupNumber < confirmedGroups.length; groupNumber++) {
         const group = confirmedGroups[groupNumber]
         const names = await this.attendeeNamesForRegistrations(group, prisma)
-        embed.addField(
-          `Group ${groupNumber+1} (${group.length}/${event.maxPlayers})`,
-          names.join("\n"),
-          true)
+        const count = group.length < maxPlayers ? `${group.length}/${event.maxPlayers}` : "Full"
+        embed.addField(`Group ${groupNumber+1} (${count})`, names.join("\n"), true)
       }
     }
 

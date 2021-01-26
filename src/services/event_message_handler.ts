@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client"
 import { CommandMessage } from "@typeit/discord"
-import { Message } from "discord.js"
+import { Message, MessageEmbed } from "discord.js"
 import { Session } from "../sessions/session"
 import { CreateEventMessageHandler } from "./create_event_message_handler"
 import { EventDescriptionMessageHandler } from "./event_description_message_handler"
@@ -17,11 +17,26 @@ export class EventMessageHandler {
   ): Promise<void> {
     switch (message.args.commandName) {
       case "create":
-        CreateEventMessageHandler.handle(session, prisma)
-        break
+        return CreateEventMessageHandler.handle(session, prisma)
       default:
-        EventDescriptionMessageHandler.handle(message.args.commandName, session, prisma)
-        break
+        return this.handleDefault(message.args.commandName, session, prisma)
     }
+  }
+
+  private static async handleDefault(
+    potentialEventId: string,
+    session: Session,
+    prisma: PrismaClient
+  ): Promise<void> {
+    if (isNaN(Number(potentialEventId))) {
+      const helpEmbed = new MessageEmbed()
+        .setColor("#cc0000")
+        .setTitle("Available Commands")
+        .setDescription("`$lfg create`: Creates a new event.\n" +
+                        "`$lfg #`: Replace # with an event's join ID to display event details.")
+      await session.channel.send(helpEmbed)
+      return
+    }
+    return EventDescriptionMessageHandler.handle(potentialEventId, session, prisma)
   }
 }

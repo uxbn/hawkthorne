@@ -22,6 +22,7 @@ model Event {
   title String
   description String?
   registrations Registration[]
+  maxPlayers Int?
 }
 
 model Registration {

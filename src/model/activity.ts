@@ -10,7 +10,9 @@ export enum ActivityCategory {
 }
 
 export interface ActivityDefinition {
+  id: string
   name: string
   category: ActivityCategory
   reaction: ReactionDescription
+  defaultMaxPlayers?: number
 }

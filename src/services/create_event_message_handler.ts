@@ -47,7 +47,8 @@ export class CreateEventMessageHandler {
       session.eventDescription,
       session.startDate,
       session.timeZoneName,
-      session.timeZoneOffset)
+      session.timeZoneOffset,
+      session.activityDefinition.defaultMaxPlayers)
     await registrationService.joinUserToEvent(dbUser, event, RegistrationType.Confirmed)
     const eventMessage = await new EventMessageGenerator(prisma).generate(event)
     const sentMessage = await session.responseMessage.edit(eventMessage)

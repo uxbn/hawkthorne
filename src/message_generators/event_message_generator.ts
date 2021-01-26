@@ -45,8 +45,16 @@ export class EventMessageGenerator implements MessageGenerator {
       embed.addField("Description", event.description, false)
     }
     
-    const registrations = await this._prisma.event.findUnique(
-      { where: { id: event.id } }).registrations()
+    const registrations = await this._prisma.event.findUnique({
+      where: { id: event.id },
+      select: {
+        registrations: {
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+      },
+    }).registrations()
     const categoriesToRegistrations: Record<number, Registration[]> = 
       registrations.reduce((map, registration) => {
         const categoryRegistrations = map[registration.registrationType] || []
@@ -54,21 +62,70 @@ export class EventMessageGenerator implements MessageGenerator {
         map[registration.registrationType] = categoryRegistrations
         return map
       }, {} as Record<number, Registration[]>)
-    for (const category in categoriesToRegistrations) {
-      const userIds = categoriesToRegistrations[category].map(r => {
-        return r.userId
-      })
-      const names: string[] = []
-      for (const userId of userIds) {
-        const user = await this._prisma.user.findUnique({where: {id: userId}})
-        if (!user) {
-          throw new Error("Registered user not found in db")
-        }
-        names.push(user.displayName)
+    await EventMessageGenerator.addAttendeeFields(
+      embed, event, categoriesToRegistrations, this._prisma)
+    return embed
+  }
+
+  private static async addAttendeeFields(
+    embed: MessageEmbed,
+    event: Event,
+    categoriesToRegistrations: Record<number, Registration[]>,
+    prisma: PrismaClient
+  ): Promise<void> {
+    const confirmedRegistrations = categoriesToRegistrations[RegistrationType.Confirmed] || []
+    const maxPlayers = event.maxPlayers
+    if (maxPlayers == null || confirmedRegistrations.length <= maxPlayers) {
+      // Do a basic list if the number of registrations is not over the max.
+      const names = await this.attendeeNamesForRegistrations(confirmedRegistrations, prisma)
+      if (names.length == 0) { names.push("None") }
+      embed.addField(
+        `${RegistrationType[RegistrationType.Confirmed]} ` +
+          `(${confirmedRegistrations.length}/${event.maxPlayers})`,
+        names.join("\n"),
+        true)
+    } else {
+      // Divide the confirmed into groups based on max player count.
+      const confirmedGroups: Registration[][] =
+        confirmedRegistrations.reduce((arrayOfArrays, registration) => {
+          const lastGroup = arrayOfArrays[arrayOfArrays.length - 1]
+          if (lastGroup.length < maxPlayers) {
+            lastGroup.push(registration)
+          } else {
+            arrayOfArrays.push([registration])
+          }
+          return arrayOfArrays
+        }, [[]] as Registration[][])
+      for (let groupNumber = 0; groupNumber < confirmedGroups.length; groupNumber++) {
+        const group = confirmedGroups[groupNumber]
+        const names = await this.attendeeNamesForRegistrations(group, prisma)
+        embed.addField(
+          `Group ${groupNumber+1} (${group.length}/${event.maxPlayers})`,
+          names.join("\n"),
+          true)
       }
-      embed.addField(`${RegistrationType[category]}`, names.join("\n"), true)
     }
 
-    return embed
+    const tentativeRegistrations = categoriesToRegistrations[RegistrationType.Tentative] || []
+    const names = await this.attendeeNamesForRegistrations(tentativeRegistrations, prisma)
+    if (names.length > 0) {
+      embed.addField(`${RegistrationType[RegistrationType.Tentative]}`, names.join("\n"), true)
+    }
+  }
+
+  private static async attendeeNamesForRegistrations(
+    registrations: Registration[],
+    prisma: PrismaClient
+  ): Promise<string[]> {
+    const userIds = registrations.map(r => { return r.userId })
+    const names: string[] = []
+    for (const userId of userIds) {
+      const user = await prisma.user.findUnique({where: {id: userId}})
+      if (!user) {
+        throw new Error("Registered user not found in db")
+      }
+      names.push(user.displayName)
+    }
+    return names
   }
 }

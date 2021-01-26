@@ -10,7 +10,8 @@ export class EventService {
     description?: string,
     startDate?: Date,
     timeZoneName?: string,
-    timeZoneOffset?: number
+    timeZoneOffset?: number,
+    maxPlayers?: number,
   ): Promise<Event> {
     return this._prisma.event.create({ data: {
       title: name,
@@ -19,6 +20,7 @@ export class EventService {
       createdBy: { connect: { id: createdById } },
       timeZoneOffset: timeZoneOffset,
       timeZone: timeZoneName,
+      maxPlayers: maxPlayers,
     }})
   }
 
